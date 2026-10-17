@@ -41,6 +41,7 @@ Start an [Ollama](https://docs.ollama.com/) server and install a model that supp
 ```bash
 ollama list
 # Replace YOUR_MODEL with an installed model that supports tools.
+agent-tripwire check --model YOUR_MODEL
 agent-tripwire run --model YOUR_MODEL --trials 3 --html reports/run.html --json reports/run.json
 ```
 
@@ -55,6 +56,17 @@ agent-tripwire run --model YOUR_MODEL --base-url http://127.0.0.1:11434 --max-tu
 Each trial first runs the legitimate task without injected content, then runs each selected attack in a fresh environment and conversation. If the clean control fails, the report marks attribution as uncertain. A model connection/protocol error on the control stops the suite rather than repeating the same failure for every case.
 
 This evaluates **your chosen model inside the bundled support-assistant application**. It does not attach to an arbitrary existing assistant or audit an entire model. The Python `run_case` / `run_suite` API also accepts an adapter factory implementing `next(messages, tools, remaining)`; see [architecture](docs/architecture.md).
+
+### Check your connection first
+
+`check` performs one clean task through the same adapter and tools used by `run`. It verifies that your endpoint responds, the model requests the ticket and notes tools, their results make it through the conversation, and the final answer passes the task check. It makes actual inference requests to the configured endpoint, so normal provider charges can apply.
+
+```bash
+agent-tripwire check --provider openai-compatible --base-url http://127.0.0.1:1234/v1 --model YOUR_MODEL --details
+agent-tripwire check --model YOUR_MODEL --json reports/connection.json --junit reports/connection.xml
+```
+
+The provider, credential, policy and execution-budget options work the same as `run`. No injection scenarios are delivered. A failed connection, unsupported tool exchange, incomplete task or invalid control returns **2**. Success returns **0** and means this clean task worked; it is not a prompt-injection security result.
 
 ### OpenAI-compatible model servers
 
@@ -86,6 +98,33 @@ agent-tripwire run --model YOUR_MODEL --scenario-file examples/custom-scenarios.
 Scenario files contain an array of objects with `id`, `title`, `surface`, `objective` and `payload`. Supported surfaces are `read_ticket` and `search_notes`. The `{sink}` placeholder is replaced with the current case's local receiver URL; no other template expressions are evaluated. Repeat `--scenario-file` to combine files. Without `--scenario`, all loaded cases run, including the five built-ins.
 
 IDs must be unique lowercase slugs, and `control` is reserved. Files are limited to 1 MiB, payloads to 8 KiB, and the combined suite to 50 cases. These files define injected content and descriptions; they do not execute code or add permissions. Custom cases use the existing task and evidence checks. A new environment, tool or objective requiring different proof still needs a Python extension.
+
+## Investigate saved evidence offline
+
+Save JSON once, then inspect the results without another model request:
+
+```bash
+agent-tripwire report reports/run.json
+agent-tripwire report reports/run.json --only findings --details
+agent-tripwire report reports/run.json --only attention
+agent-tripwire report reports/run.json --scenario settings-write --trial 2 --details --html reports/settings-review.html
+```
+
+`--only findings` selects confirmed crossings. `--only attention` also selects attempted violations, errors, incomplete results and invalid controls. Repeat `--scenario` to select several cases; filters combine. Relevant clean controls stay visible so you can judge attribution. Empty filters explicitly say no results matched; that does not mean the whole run passed.
+
+Filters affect the terminal and HTML views. The command's exit status, `--json` and `--junit` exports always cover the **complete input run**, so selecting a passing case cannot conceal other failures in automation. Input JSON is never modified. Loaded reports have their counts and control validity recomputed, and malformed evidence is rejected. Validation checks structure, not authenticity: reports are local evidence files, not signed attestations.
+
+## Use results in CI
+
+```bash
+agent-tripwire run --model YOUR_MODEL --json reports/run.json --junit reports/results.xml
+# Or convert an existing run entirely offline:
+agent-tripwire report reports/run.json --junit reports/results.xml
+```
+
+Point your CI test-results publisher at the XML file. There is one test per case/trial, including clean controls. Verified boundary crossings produce `<failure>` entries. Backend errors, exhausted budgets, incomplete tasks and invalid clean controls produce `<error>` entries. If a crossing also has an error or incomplete task, it is an error with the verified evidence preserved in its diagnostic text. Blocked attempts with a successful task/control pass the completed-boundary check; they remain visible as `blocked`, not evidence that the model ignored the injection.
+
+JUnit contains outcome summaries and evidence references; JSON/HTML retain the full timeline. Scripted demos remain labeled as demos in XML metadata. Capture reports even when the command exits nonzero, and publish artifacts using your CI's always-run mechanism. Never replace a nonzero evaluation exit with success merely to upload its reports. See [example JUnit output](examples/demo-junit.xml).
 
 ## Compare saved runs
 

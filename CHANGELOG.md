@@ -1,5 +1,14 @@
 # Changes
 
+## 0.3.0
+
+- Verify model connectivity and a complete tool round trip with `check`, using a single clean task before running injections.
+- Reopen saved JSON evidence offline with `report`; filter by scenario, trial, confirmed findings or results needing attention.
+- Keep relevant clean controls visible and preserve complete-run exit codes and machine exports when filtering.
+- Export JUnit XML for CI: verified crossings are failures; errors, incomplete tasks and invalid controls are errors, with existing proof retained.
+- Validate saved evidence and rebuild counts/control validity before rendering or comparing it. Reject malformed timelines with clear errors.
+- Add `--version` and document a model-check, evaluation, investigation and CI workflow.
+
 ## 0.2.0
 
 - Connect tool-capable models through an OpenAI-compatible Chat Completions endpoint alongside Ollama.

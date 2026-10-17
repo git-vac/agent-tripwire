@@ -1,5 +1,5 @@
 """Compare observed counts without turning small test suites into safety scores."""
-from collections import defaultdict
+from collections import Counter, defaultdict
 import html
 import json
 from pathlib import Path
@@ -17,18 +17,23 @@ def read_report(path):
     with Path(path).open("rb") as stream:
         raw = stream.read(16 * 1024 * 1024 + 1)
     if len(raw) > 16 * 1024 * 1024:
-        raise ValueError("Comparison input exceeds 16 MiB")
+        raise ValueError("Report input exceeds 16 MiB")
     try:
         report = json.loads(raw)
     except (ValueError, RecursionError):
-        raise ValueError("Comparison input must be a valid JSON report") from None
+        raise ValueError("Input must be a valid JSON report") from None
     if not isinstance(report, dict) or report.get("schema_version") != 1 or report.get("mode") not in ("demo", "run"):
         raise ValueError("Expected an Agent Tripwire run report with schema_version 1")
     if not isinstance(report.get("results"), list) or not 1 <= len(report["results"]) <= 2000:
         raise ValueError("Report must contain between 1 and 2,000 case results")
-    for field in ("model", "policy", "task", "system_prompt"):
+    for field in ("model", "policy", "task", "system_prompt", "created_at"):
         if not isinstance(report.get(field), str):
             raise ValueError("Report is missing required metadata")
+    if (report["policy"] not in ("observe", "enforce") or
+            not isinstance(report.get("provider", "ollama"), str) or
+            type(report.get("trials")) is not int or not 1 <= report["trials"] <= 20 or
+            not isinstance(report.get("notes"), list) or any(not isinstance(note, str) for note in report["notes"])):
+        raise ValueError("Report contains invalid metadata")
     seen = set()
     for result in report["results"]:
         if (not isinstance(result, dict) or not isinstance(result.get("id"), str) or not result["id"] or
@@ -41,10 +46,54 @@ def read_report(path):
         if key in seen:
             raise ValueError("Report contains duplicate case/trial results")
         seen.add(key)
+        validate_evidence(result)
     fingerprints = report.get("scenario_fingerprints", {})
     if not isinstance(fingerprints, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in fingerprints.items()):
         raise ValueError("Report contains invalid scenario fingerprints")
+    controls = {item["trial"]: item for item in report["results"] if item["id"] == "control"}
+    for result in report["results"]:
+        control = controls.get(result["trial"])
+        if control is None:
+            raise ValueError("Report is missing a clean control for a trial")
+        result["clean_control_ok"] = (control["status"] == "no-boundary-crossing" and control["task_complete"]
+            and not control["error"] and not control["limits_reached"] and not control["attempted"])
+    # Aggregate counts and control validity are derived, never trusted from a saved file.
+    report["counts"] = dict(Counter(item["status"] for item in report["results"] if item["id"] != "control"))
     return report
+
+
+def validate_evidence(result):
+    def fields(value, spec):
+        if not isinstance(value, dict) or any(type(value.get(key)) is not kind for key, kind in spec.items()):
+            raise ValueError("Report contains malformed evidence fields")
+
+    fields(result, {"title": str, "objective": str, "final": str, "injection_exposed": bool,
+        "tool_calls": int, "elapsed_ms": int, "events": list, "evidence": list, "receipts": list})
+    if (result["error"] is not None and not isinstance(result["error"], str) or
+            result["elapsed_ms"] < 0 or result["tool_calls"] < 0 or len(result["events"]) > 10000):
+        raise ValueError("Report contains invalid result measurements")
+    specs = {
+        "tool_attempt": {"tool": str, "arguments": dict, "unauthorized": bool},
+        "injection_delivered": {"tool": str, "payload": str},
+        "tool_result": {"tool": str, "content": str, "unauthorized": bool},
+        "receiver_observed": {"bytes": int, "canary_received": bool, "sha256": str},
+        "file_observed": {"path": str, "changed": bool, "unauthorized": bool,
+            "before_sha256": str, "after_sha256": str},
+        "assistant": {"content": str}, "tool_blocked": {"tool": str, "reason": str},
+        "invalid_call": {"tool": str, "detail": str}, "error": {"detail": str}, "limit": {"detail": str}}
+    previous = 0
+    for event in result["events"]:
+        fields(event, {"step": int, "kind": str})
+        if event["kind"] not in specs or event["step"] <= previous:
+            raise ValueError("Report contains invalid timeline events")
+        previous = event["step"]
+        fields(event, specs[event["kind"]])
+    for proof in result["evidence"]:
+        fields(proof, {"step": int, "finding": str})
+        if proof["step"] not in {event["step"] for event in result["events"]}:
+            raise ValueError("Evidence references a missing timeline step")
+    for receipt in result["receipts"]:
+        fields(receipt, {"bytes": int, "canary_received": bool, "sha256": str})
 
 
 def compare(before, after):

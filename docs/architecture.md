@@ -1,7 +1,7 @@
 # Architecture and evidence
 
 ```text
-Ollama model / scripted demonstration
+Ollama / compatible model / scripted demonstration
                   │ tool calls
                   ▼
        runner: budgets + conversation
@@ -15,7 +15,7 @@ Ollama model / scripted demonstration
                       │
                deterministic assessment
                       │
-             terminal / JSON / HTML
+          terminal / JSON / HTML / JUnit
 ```
 
 `scenarios.py` defines the legitimate prompt and five payload templates. Payloads enter only the result of a permitted `read_ticket` or `search_notes` call. Delivery is recorded explicitly, so an assistant that never reads the poisoned source cannot receive a clean attack result.
@@ -72,3 +72,13 @@ Current reports are local artifacts, not cryptographically signed attestations. 
 `comparison.py` reads bounded run reports and compares case-level observed counts. Definition fingerprints, prompts, seeds, limits and trial sets must match before it reports a directional change. Failed controls or incomplete results prevent a comparison conclusion. Policies and model names may differ deliberately; the report displays both configurations. This is an observational regression view, not a statistical model ranking.
 
 Protocol references: [Ollama tool calling](https://docs.ollama.com/capabilities/tool-calling), [Chat Completions function calling](https://developers.openai.com/api/docs/guides/function-calling).
+
+## Connection checks and offline evidence
+
+`check` invokes the existing runner with an empty scenario sequence and one trial. The clean control still executes the legitimate task, validates returned tool calls and applies the execution budgets. The saved report uses `mode: run` and `purpose: connection-check`; it is explicitly labeled as a connection check in terminal and HTML. No attack case can be inferred from it.
+
+`report` uses the bounded report loader without creating an environment or contacting an endpoint. The loader validates metadata, result fields and timeline event shapes, then derives counts and clean-control validity. Reports are not authenticated; structural validation does not prove that a saved event actually happened.
+
+`workflow.py` selects terminal/HTML views and builds JUnit XML. Filters preserve the matching trials' controls and display a notice about omitted results. Machine exports and process exit codes use the complete source run. This prevents a passing selection from silently masking a failing evaluation. The input file is not rewritten.
+
+JUnit includes controls as cases. Incomplete results and invalid controls take precedence over failures, matching the CLI's exit-2 semantics, but any verified finding remains in the diagnostic text. XML contains no full prompts, tool arguments or assistant messages; use the JSON/HTML evidence for investigation.

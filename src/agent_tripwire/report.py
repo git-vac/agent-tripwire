@@ -44,20 +44,24 @@ def describe(event, details=False):
 def terminal(report, console=None, details=False):
     console = console or Console(highlight=False)
     mode = "SCRIPTED DEMO · NOT A MODEL EVALUATION" if report["mode"] == "demo" else "REAL MODEL RUN · SYNTHETIC ENVIRONMENT"
-    console.print(Panel(Text("AGENT TRIPWIRE\n" + mode + "\n" + clean(report["model"]) + " · " + report.get("provider", "ollama") + " · policy: " + report["policy"]), border_style="cyan"))
+    if report.get("purpose") == "connection-check":
+        mode = "CONNECTION CHECK · CLEAN TASK ONLY"
+    console.print(Panel(Text("AGENT TRIPWIRE\n" + mode + "\n" + clean(report["model"]) + " · " + clean(report.get("provider", "ollama")) + " · policy: " + clean(report["policy"])), border_style="cyan"))
+    if report.get("view_notice"):
+        console.print(Text(clean(report["view_notice"]), style="yellow"))
     table = Table(expand=True)
     for column in ("Trial / case", "Outcome", "Control", "Evidence"):
         table.add_column(column, overflow="fold")
     for result in report["results"]:
         proof = "; ".join(item["finding"] for item in result["evidence"]) or result.get("error") or (
             "Task incomplete or injection not reached" if result["status"] == "inconclusive" else "No completed forbidden action observed")
-        table.add_row(Text(f'{result["trial"]} / {result["id"]}'), Text(result["status"], style=COLORS[result["status"]]),
+        table.add_row(Text(clean(f'{result["trial"]} / {result["id"]}')), Text(result["status"], style=COLORS[result["status"]]),
             Text("OK" if result["clean_control_ok"] else "UNCERTAIN", style="green" if result["clean_control_ok"] else "yellow"), Text(clean(proof)))
     console.print(table)
     for result in report["results"]:
         if result["id"] == "control" and not details and result["clean_control_ok"]:
             continue
-        console.print(Text(f'\n{result["id"]} · trial {result["trial"]} · {result["status"]}', style="bold"))
+        console.print(Text(clean(f'\n{result["id"]} · trial {result["trial"]} · {result["status"]}'), style="bold"))
         for event in result["events"]:
             if not details and event["kind"] in ("tool_result", "assistant"):
                 continue
@@ -87,6 +91,8 @@ summary{cursor:pointer;font-weight:600}pre{white-space:pre-wrap;overflow-wrap:an
 def webpage(report):
     e = lambda value: html.escape(clean(value), quote=True)
     mode = "SCRIPTED DEMO — NOT A MODEL EVALUATION" if report["mode"] == "demo" else "REAL MODEL RUN — SYNTHETIC ENVIRONMENT"
+    if report.get("purpose") == "connection-check":
+        mode = "CONNECTION CHECK — CLEAN TASK ONLY"
     rows, cases = [], []
     for result in report["results"]:
         status = e(result["status"])
@@ -107,7 +113,7 @@ def webpage(report):
         '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">' \
         '<title>Agent Tripwire · evidence report</title><style>' + STYLE + '</style></head><body><main>' \
         '<div class="eyebrow">ACTION-LEVEL PROMPT INJECTION TESTING</div><h1>Agent Tripwire</h1>' \
-        f'<div class="banner"><strong>{e(mode)}</strong><p>{e(report["model"])} · policy: {e(report["policy"])} · {e(report["created_at"])}</p></div>' \
+        f'<div class="banner"><strong>{e(mode)}</strong><p>{e(report["model"])} · policy: {e(report["policy"])} · {e(report["created_at"])}</p><p>{e(report.get("view_notice", ""))}</p></div>' \
         '<div class="metrics">' + ''.join(f'<div class="metric"><strong>{value}</strong>{e(label)}</div>' for label, value in metrics) + '</div>' \
         '<h2>Observed outcomes</h2><div class="card scroll"><table><thead><tr><th>Trial / case</th><th>Outcome</th><th>Clean control</th><th>Evidence</th></tr></thead><tbody>' \
         + ''.join(rows) + '</tbody></table></div><h2>Evidence timelines</h2>' + ''.join(cases) \
