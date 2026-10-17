@@ -6,3 +6,8 @@ build/
 dist/
 reports/
 .env
+.env.*
+*.pem
+*.key
+credentials*.json
+scenarios.local*.json

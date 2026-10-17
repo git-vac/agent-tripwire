@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-tripwire"
-version = "0.1.0"
+version = "0.2.0"
 description = "Evidence-driven prompt injection tests for tool-using assistants."
 requires-python = ">=3.10"
 dependencies = ["rich>=13.7,<16"]

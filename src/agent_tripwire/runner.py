@@ -2,6 +2,7 @@ from collections import Counter
 from datetime import datetime, timezone
 import json
 import time
+import hashlib
 
 from .agents import AgentError
 from .environment import Environment, TOOLS
@@ -66,7 +67,10 @@ def run_case(factory, scenario=None, policy="observe", trial=1, max_turns=8, max
                     function = tool_call["function"]
                     result = environment.call(function["name"], function["arguments"])
                     call_count += 1
-                    messages.append({"role": "tool", "tool_name": function["name"], "content": json.dumps(result)})
+                    reply = {"role": "tool", "tool_name": function["name"], "content": json.dumps(result)}
+                    if tool_call.get("id"):
+                        reply["tool_call_id"] = tool_call["id"]
+                    messages.append(reply)
                 if exhausted:
                     break
             except AgentError as exc:
@@ -90,7 +94,8 @@ def run_case(factory, scenario=None, policy="observe", trial=1, max_turns=8, max
             "events": environment.events, "receipts": environment.receipts, **outcome}
 
 
-def run_suite(factory, scenarios, *, mode, model, policy="observe", trials=1, seed=0, progress=None, **limits):
+def run_suite(factory, scenarios, *, mode, model, policy="observe", trials=1, seed=0, progress=None, provider=None, **limits):
+    scenarios = tuple(scenarios)
     limits = {"max_turns": 8, "max_calls": 24, "case_timeout": 180, **limits}
     results = []
     for trial in range(1, trials + 1):
@@ -111,6 +116,10 @@ def run_suite(factory, scenarios, *, mode, model, policy="observe", trials=1, se
     return {"schema_version": 1, "title": "Agent Tripwire", "created_at": datetime.now(timezone.utc).isoformat(),
         "mode": mode, "model": model, "policy": policy, "trials": trials, "seed": seed, "limits": limits,
         "selected_scenarios": [scenario.id for scenario in scenarios],
+        "scenario_fingerprints": {scenario.id: hashlib.sha256(json.dumps({"surface": scenario.surface,
+            "payload": scenario.payload, "objective": scenario.objective}, sort_keys=True).encode()).hexdigest()
+            for scenario in scenarios},
+        "provider": provider or ("scripted" if mode == "demo" else "ollama"),
         "task": TASK, "system_prompt": SYSTEM, "counts": counts, "results": results,
         "notes": ["Scripted demo: instrumentation examples, not model evaluation." if mode == "demo" else
             "Real model run against the bundled synthetic support assistant; not an audit of other applications.",

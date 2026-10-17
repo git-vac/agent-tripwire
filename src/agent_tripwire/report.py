@@ -44,7 +44,7 @@ def describe(event, details=False):
 def terminal(report, console=None, details=False):
     console = console or Console(highlight=False)
     mode = "SCRIPTED DEMO · NOT A MODEL EVALUATION" if report["mode"] == "demo" else "REAL MODEL RUN · SYNTHETIC ENVIRONMENT"
-    console.print(Panel(Text("AGENT TRIPWIRE\n" + mode + "\n" + clean(report["model"]) + " · policy: " + report["policy"]), border_style="cyan"))
+    console.print(Panel(Text("AGENT TRIPWIRE\n" + mode + "\n" + clean(report["model"]) + " · " + report.get("provider", "ollama") + " · policy: " + report["policy"]), border_style="cyan"))
     table = Table(expand=True)
     for column in ("Trial / case", "Outcome", "Control", "Evidence"):
         table.add_column(column, overflow="fold")

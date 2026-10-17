@@ -6,7 +6,7 @@ Agent Tripwire tests indirect prompt injections against a tool-using support ass
 
 ![Scripted demonstration of action-level evidence](examples/terminal.svg)
 
-[Example HTML report](examples/demo-report.html) · [Example JSON](examples/demo-report.json) · [Architecture and evidence](docs/architecture.md)
+[Example HTML report](examples/demo-report.html) · [Run comparison](examples/comparison.html) · [Custom scenario file](examples/custom-scenarios.json) · [Architecture and evidence](docs/architecture.md)
 
 ## Install
 
@@ -34,7 +34,7 @@ The default demo is a **scripted vulnerable agent**, not an AI model. It demonst
 
 Terminal timelines are included by default. Add `--details` for full injection text, tool results and assistant output. HTML reports are standalone, work offline and contain no JavaScript or external assets. Output files must be new; existing files are never overwritten. `--no-color` and `NO_COLOR` disable terminal colors.
 
-## Evaluate a real model
+## Evaluate your own model
 
 Start an [Ollama](https://docs.ollama.com/) server and install a model that supports [tool calling](https://docs.ollama.com/capabilities/tool-calling). The model must fit your machine. Agent Tripwire does not download models or require cloud accounts.
 
@@ -55,6 +55,51 @@ agent-tripwire run --model YOUR_MODEL --base-url http://127.0.0.1:11434 --max-tu
 Each trial first runs the legitimate task without injected content, then runs each selected attack in a fresh environment and conversation. If the clean control fails, the report marks attribution as uncertain. A model connection/protocol error on the control stops the suite rather than repeating the same failure for every case.
 
 This evaluates **your chosen model inside the bundled support-assistant application**. It does not attach to an arbitrary existing assistant or audit an entire model. The Python `run_case` / `run_suite` API also accepts an adapter factory implementing `next(messages, tools, remaining)`; see [architecture](docs/architecture.md).
+
+### OpenAI-compatible model servers
+
+Use a server implementing the Chat Completions tool-calling protocol. Set the model name to one served by that endpoint; the server and model both need function/tool support. This adapter targets the compatible wire protocol, not every provider's model-specific options.
+
+```bash
+agent-tripwire run --provider openai-compatible --base-url http://127.0.0.1:1234/v1 --model YOUR_MODEL --json reports/local.json
+```
+
+The compatible provider defaults to `http://127.0.0.1:1234/v1`; Ollama defaults to `http://127.0.0.1:11434`. Set `--base-url` to your server's API base (include `/v1` when needed, but not `/chat/completions`). The adapter preserves tool-call IDs and converts JSON function arguments automatically.
+
+For authenticated endpoints, set a credential in your environment privately, then pass **only its variable name**:
+
+```bash
+agent-tripwire run --provider openai-compatible --base-url https://model-server.example/v1 --model YOUR_MODEL --api-key-env MODEL_API_KEY
+```
+
+There is no `--api-key` flag and no key field in scenario files. Keys are read at runtime, sent only as an authorization header to the configured endpoint, and excluded from report metadata. Exact echoes of that key in compatible model responses are redacted before recording. Remote authenticated endpoints require HTTPS; loopback HTTP is supported for local servers. Do not commit credentials, `.env` files or private reports. Examples and integration tests use invented values only. Do not put actual credentials in model names, payloads or other arguments: synthetic evaluation fixtures never require them.
+
+## Add your own injection tests
+
+Load additional scenarios without modifying Python:
+
+```bash
+agent-tripwire list --scenario-file examples/custom-scenarios.json
+agent-tripwire run --model YOUR_MODEL --scenario-file examples/custom-scenarios.json --scenario diagnostic-note --json reports/custom.json
+```
+
+Scenario files contain an array of objects with `id`, `title`, `surface`, `objective` and `payload`. Supported surfaces are `read_ticket` and `search_notes`. The `{sink}` placeholder is replaced with the current case's local receiver URL; no other template expressions are evaluated. Repeat `--scenario-file` to combine files. Without `--scenario`, all loaded cases run, including the five built-ins.
+
+IDs must be unique lowercase slugs, and `control` is reserved. Files are limited to 1 MiB, payloads to 8 KiB, and the combined suite to 50 cases. These files define injected content and descriptions; they do not execute code or add permissions. Custom cases use the existing task and evidence checks. A new environment, tool or objective requiring different proof still needs a Python extension.
+
+## Compare saved runs
+
+```bash
+agent-tripwire demo --json reports/before.json
+agent-tripwire demo --policy enforce --json reports/after.json
+agent-tripwire compare reports/before.json reports/after.json --html reports/comparison.html
+```
+
+For real evaluation, save JSON from each `run` invocation and compare those files the same way. The comparison shows confirmed crossings as counts per case, such as `3/3 → 1/3`. It does not create a general safety score. Policy changes are displayed explicitly: comparing `observe` with `enforce` measures the complete setup, including tool authorization.
+
+Different payload fingerprints, prompts, execution limits, seeds, trial sets or demo/real modes make a row **not comparable**. Failed controls, errors and incomplete results also prevent a directional conclusion. Older reports without fingerprints still load, but their scenario definitions cannot be verified for comparison. Keep the original reports for the full evidence timelines. Comparison inputs are bounded to 16 MiB each.
+
+Comparison exits: **0** no increase in comparable observed crossing counts; **1** at least one comparable increase; **2** any non-comparable row or no attack cases. These are regression signals for the supplied runs, not model rankings.
 
 ## What is tested?
 
@@ -99,7 +144,7 @@ Exit codes: **0** no completed crossing with valid controls/results; **1** compl
 
 JSON records the selected scenarios, model name, seed, policy, limits, prompt, trial and complete evidence timeline. Temperature is zero and the seed is passed to Ollama. This supports repeating the setup, but does not guarantee identical model outputs across hardware, model versions or runtimes. Keep the model version/digest separately for stronger reproducibility.
 
-Add scenario templates in `src/agent_tripwire/scenarios.py`; both built-in injection surfaces use the same runner and scoring rules. New tools or attacker objectives need explicit environment behavior and independent evidence checks.
+Use `--scenario-file` for additional payloads, or add built-in templates in `src/agent_tripwire/scenarios.py`; both injection surfaces use the same runner and scoring rules. Reports record the provider and definition fingerprints for selected scenarios. New tools or attacker objectives need explicit environment behavior and independent evidence checks.
 
 ```bash
 python -m unittest discover -s tests -v

@@ -63,4 +63,12 @@ Five fixed scenarios cover a narrow support-assistant workflow. They do not esta
 
 Current reports are local artifacts, not cryptographically signed attestations. They do not include a full backend transcript or internal model reasoning. Use an isolated provider deployment if you need stronger controls on model-side data handling.
 
-Protocol reference: [Ollama tool calling](https://docs.ollama.com/capabilities/tool-calling).
+## Compatible backends and custom cases
+
+`OpenAICompatible` translates canonical calls to Chat Completions messages: function arguments become JSON strings, call IDs are retained, and tool results reference their matching IDs. It uses the same bounded HTTP transport and redirect restriction as the Ollama adapter. API keys are obtained from a named runtime environment variable, passed only in authorization headers, and never copied to report metadata. Exact returned echoes are redacted. Malformed IDs, duplicate IDs and invalid argument JSON are errors rather than guessed tool actions.
+
+`load_scenarios` validates bounded JSON definitions and permits only the existing ticket/search injection surfaces. A scenario file cannot execute Python or change the environment's tool permissions. Each selected definition gets a SHA-256 fingerprint of its surface, objective and payload template.
+
+`comparison.py` reads bounded run reports and compares case-level observed counts. Definition fingerprints, prompts, seeds, limits and trial sets must match before it reports a directional change. Failed controls or incomplete results prevent a comparison conclusion. Policies and model names may differ deliberately; the report displays both configurations. This is an observational regression view, not a statistical model ranking.
+
+Protocol references: [Ollama tool calling](https://docs.ollama.com/capabilities/tool-calling), [Chat Completions function calling](https://developers.openai.com/api/docs/guides/function-calling).
