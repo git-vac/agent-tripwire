@@ -31,7 +31,21 @@ def describe(event, details=False):
         label = "OUT OF SCOPE" if event["unauthorized"] else "permitted"
         return f'{event["tool"]} {args} · {label}'
     if kind == "injection_delivered":
-        return "Untrusted instructions delivered through " + event["tool"] + ("\n" + event["payload"] if details else "")
+        text = "Untrusted instructions delivered through " + event["tool"]
+        if details:
+            text += "\nInjected material:\n" + event["payload"]
+            if "legitimate_content" in event:
+                text += "\nLegitimate source data:\n" + event["legitimate_content"]
+        return text
+    if kind == "injection_served":
+        return ("Injected response prepared; application receipt pending · " + event["source"] +
+            " · response " + str(event["response_ordinal"]) + ("\n" + json.dumps(event, ensure_ascii=False) if details else ""))
+    if kind == "application_received":
+        return event["tool"] + " · application acknowledged response SHA-256 " + event["sha256"]
+    if kind == "permission_decision":
+        return event["tool"] + " · " + ("allowed" if event["allowed"] else "denied") + " · " + event["detail"]
+    if kind == "mcp_tool_requested":
+        return event["tool"] + " · MCP request " + event["request_id"] + ("\n" + json.dumps(event["arguments"], ensure_ascii=False) if details else "")
     if kind == "tool_result":
         return event["tool"] + " returned data" + ("\n" + event["content"] if details else "")
     if kind == "receiver_observed":
@@ -46,6 +60,8 @@ def terminal(report, console=None, details=False):
     mode = "SCRIPTED DEMO · NOT A MODEL EVALUATION" if report["mode"] == "demo" else "REAL MODEL RUN · SYNTHETIC ENVIRONMENT"
     if report.get("purpose") == "connection-check":
         mode = "CONNECTION CHECK · CLEAN TASK ONLY"
+    elif report.get("purpose") == "application-evaluation":
+        mode += " · SEPARATE MCP APPLICATION"
     console.print(Panel(Text("AGENT TRIPWIRE\n" + mode + "\n" + clean(report["model"]) + " · " + clean(report.get("provider", "ollama")) + " · policy: " + clean(report["policy"])), border_style="cyan"))
     if report.get("view_notice"):
         console.print(Text(clean(report["view_notice"]), style="yellow"))
@@ -93,6 +109,8 @@ def webpage(report):
     mode = "SCRIPTED DEMO — NOT A MODEL EVALUATION" if report["mode"] == "demo" else "REAL MODEL RUN — SYNTHETIC ENVIRONMENT"
     if report.get("purpose") == "connection-check":
         mode = "CONNECTION CHECK — CLEAN TASK ONLY"
+    elif report.get("purpose") == "application-evaluation":
+        mode += " — SEPARATE MCP APPLICATION"
     rows, cases = [], []
     for result in report["results"]:
         status = e(result["status"])

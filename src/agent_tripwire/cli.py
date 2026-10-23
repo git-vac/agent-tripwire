@@ -45,11 +45,20 @@ def main(argv=None):
     report_parser.add_argument("--scenario", action="append", help="Show selected case IDs with their clean controls")
     report_parser.add_argument("--trial", type=bounded(1, 20), help="Show one trial")
     report_parser.add_argument("--only", choices=("findings", "attention"), help="Findings: confirmed crossings; attention: crossings, attempts or incomplete results")
-    for name in ("demo", "run", "check", "report"):
+    example = commands.add_parser("example-agent", help="Serve a separate MCP agent application on loopback")
+    example.add_argument("--connection-file", required=True, metavar="FILE", help="New private file for generated lab credentials")
+    example.add_argument("--engine", choices=("scripted-vulnerable", "scripted-guarded", "ollama", "openai-compatible"), default="scripted-vulnerable")
+    example.add_argument("--model")
+    example.add_argument("--base-url")
+    example.add_argument("--api-key-env", metavar="NAME")
+    example.add_argument("--timeout", type=bounded(1, 120), default=60)
+    example.add_argument("--no-color", action="store_true")
+    for name in ("demo", "run", "check", "report", "app"):
         sub = report_parser if name == "report" else commands.add_parser(name, help={
             "demo": "Scripted instrumentation demo", "run": "Test a real tool-calling model",
-            "check": "Verify connection and tool round trip with one clean task"}[name])
-        if name in ("run", "demo"):
+            "check": "Verify connection and tool round trip with one clean task",
+            "app": "Evaluate a separately running application through the HTTP/MCP adapter"}[name])
+        if name in ("run", "demo", "app"):
             sub.add_argument("--scenario", action="append", help="Repeat to select case IDs; default: all loaded cases")
         if name != "report":
             sub.add_argument("--policy", choices=("observe", "enforce"), default="observe")
@@ -64,14 +73,19 @@ def main(argv=None):
         sub.add_argument("--no-color", action="store_true")
         if name == "demo":
             sub.add_argument("--behavior", choices=("vulnerable", "guarded"), default="vulnerable")
-        elif name in ("run", "check"):
-            sub.add_argument("--model", required=True, help="Model name served by your selected backend; tools required")
-            sub.add_argument("--provider", choices=("ollama", "openai-compatible"), default="ollama")
-            sub.add_argument("--base-url", help="Server base URL; default: Ollama :11434, compatible :1234/v1")
-            sub.add_argument("--api-key-env", metavar="NAME", help="Read a compatible endpoint's API key from this environment variable")
-            if name == "run":
+        elif name in ("run", "check", "app"):
+            if name == "app":
+                sub.add_argument("--connection-file", required=True, metavar="FILE")
+                sub.add_argument("--injection-call", type=bounded(1, 100), default=1, help="Inject only this matching source response ordinal")
+            else:
+                sub.add_argument("--model", required=True, help="Model name served by your selected backend; tools required")
+                sub.add_argument("--provider", choices=("ollama", "openai-compatible"), default="ollama")
+                sub.add_argument("--base-url", help="Server base URL; default: Ollama :11434, compatible :1234/v1")
+                sub.add_argument("--api-key-env", metavar="NAME", help="Read a compatible endpoint's API key from this environment variable")
+            if name in ("run", "app"):
                 sub.add_argument("--scenario-file", action="append", default=[], metavar="FILE", help="Load additional JSON scenarios")
-            sub.add_argument("--timeout", type=bounded(1, 120), default=60, help="Per-request timeout in seconds")
+            if name != "app":
+                sub.add_argument("--timeout", type=bounded(1, 120), default=60, help="Per-request timeout in seconds")
             sub.add_argument("--case-timeout", type=bounded(1, 1800), default=180)
             sub.add_argument("--max-turns", type=bounded(1, 30), default=8)
             sub.add_argument("--max-calls", type=bounded(1, 100), default=24)
@@ -79,6 +93,23 @@ def main(argv=None):
     args = parser.parse_args(argv)
     console = Console(no_color=args.no_color or bool(os.getenv("NO_COLOR")), highlight=False)
     try:
+        if args.command == "example-agent":
+            try:
+                import mcp  # noqa: F401
+            except ImportError:
+                raise ValueError('The example application needs: python -m pip install ".[application]"') from None
+            from .example_agent import ExampleApplication
+            api_key = os.environ.get(args.api_key_env) if args.api_key_env else None
+            if args.api_key_env and not api_key:
+                raise ValueError("The named API key environment variable is empty or unset")
+            if Path(args.connection_file).exists():
+                raise ValueError("Connection file already exists; choose a new private filename")
+            with ExampleApplication(args.engine, args.model, args.base_url, api_key, args.timeout) as app:
+                app.connection_file(args.connection_file)
+                console.print(Text("Separate MCP example application ready. Private connection file created; keep this process running."))
+                console.print(Text("Mode: " + app.info["mode"] + " · " + app.info["model"]))
+                app.thread.join()
+            return 0
         if args.command == "list":
             for scenario in load_scenarios(args.scenario_file).values():
                 console.print(Text(scenario.id, style="cyan"))
@@ -117,7 +148,15 @@ def main(argv=None):
             raise ValueError("Unknown scenario ID; use 'list' with the same scenario files")
         scenarios = [available[name] for name in selected]
         limits = {}
-        if args.command == "demo":
+        def progress(trial, scenario):
+            console.print(Text(f'Running trial {trial}: {scenario.id if scenario else "clean control"}…', style="dim"))
+        if args.command == "app":
+            from .application import HTTPApplicationAdapter, run_application_suite
+            adapter = HTTPApplicationAdapter.from_file(args.connection_file)
+            report = run_application_suite(adapter, scenarios, policy=args.policy, trials=args.trials,
+                seed=args.seed, injection_call=args.injection_call, max_turns=args.max_turns,
+                max_calls=args.max_calls, case_timeout=args.case_timeout, progress=progress)
+        elif args.command == "demo":
             factory = lambda environment: Scripted(environment, args.behavior)
             model = "scripted-" + args.behavior
         else:
@@ -137,10 +176,9 @@ def main(argv=None):
             factory(None)
             model = args.model
             limits = {"max_turns": args.max_turns, "max_calls": args.max_calls, "case_timeout": args.case_timeout}
-        def progress(trial, scenario):
-            console.print(Text(f'Running trial {trial}: {scenario.id if scenario else "clean control"}…', style="dim"))
-        report = run_suite(factory, scenarios, mode="run" if args.command == "check" else args.command, model=model, policy=args.policy,
-            trials=args.trials, seed=getattr(args, "seed", 0), provider=getattr(args, "provider", "scripted"), progress=progress, **limits)
+        if args.command != "app":
+            report = run_suite(factory, scenarios, mode="run" if args.command == "check" else args.command, model=model, policy=args.policy,
+                trials=args.trials, seed=getattr(args, "seed", 0), provider=getattr(args, "provider", "scripted"), progress=progress, **limits)
         if args.command == "check":
             report["purpose"] = "connection-check"
             report["notes"].insert(0, "Connection check only: clean task and tool round trip; no injection scenarios were run.")

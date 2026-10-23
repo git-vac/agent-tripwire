@@ -1,5 +1,14 @@
 # Changes
 
+## 0.4.0
+
+- Test a separately running MCP agent application through a versioned, authenticated local HTTP adapter contract; include a reproducible example host with an optional pinned official MCP client SDK.
+- Place a payload into exactly one selected source response and distinguish served content from application receipt using case-scoped delivery IDs and exact response digests.
+- Preserve legitimate source text and injected material separately in evidence. Record deterministic permission decisions alongside completed synthetic reads, actual protected file changes and independent receiver receipts.
+- Reuse clean controls, task checks, offline reports, run comparisons and JUnit for application runs; incomplete tasks or missing delivery evidence remain non-passing.
+- Bound calls, protocol requests, message sizes and execution time; reject identity/credential reuse, replay, malformed messages, outside paths and destinations.
+- Add a separate-process scripted experiment and cross-platform CI regressions. These are harness validation, with no real-model security claim.
+
 ## 0.3.0
 
 - Verify model connectivity and a complete tool round trip with `check`, using a single clean task before running injections.
