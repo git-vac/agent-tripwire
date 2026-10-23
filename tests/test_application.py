@@ -444,7 +444,11 @@ class ApplicationFailureTests(unittest.TestCase):
             for raw in (b'{', b'[]', b'{}' * 70000):
                 request = urllib.request.Request(lab.url, data=raw, headers={"Authorization": "Bearer " + lab.token,
                     "Content-Type": "application/json", "Accept": "application/json, text/event-stream"})
-                with self.assertRaises(urllib.error.HTTPError):
+                # Closing an oversized unread HTTP body may surface as a TCP
+                # reset on Windows rather than a readable HTTP 400 response.
+                rejected = ((urllib.error.HTTPError, ConnectionResetError, ConnectionAbortedError)
+                    if len(raw) > 128 * 1024 else (urllib.error.HTTPError,))
+                with self.assertRaises(rejected):
                     urllib.request.urlopen(request, timeout=3)
             self.assertEqual(lab.calls, 0)
 

@@ -20,9 +20,10 @@ from agent_tripwire.workflow import junit
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default="reports/application-experiment")
+    parser.add_argument("--output")
+    parser.add_argument("--framework", choices=("native", "langchain", "pydanticai"), default="native")
     args = parser.parse_args()
-    output = Path(args.output)
+    output = Path(args.output or ("reports/application-experiment" if args.framework == "native" else f"reports/{args.framework}-experiment"))
     names = [f"{policy}.{extension}" for policy in ("observe", "enforce") for extension in ("json", "html", "xml")]
     names.append("comparison.html")
     if any((output / name).exists() for name in names):
@@ -30,7 +31,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="tripwire-app-connection-") as directory:
         connection = Path(directory) / "connection.json"
         process = subprocess.Popen([sys.executable, "-m", "agent_tripwire", "example-agent",
-            "--connection-file", str(connection)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            "--connection-file", str(connection), "--framework", args.framework], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             deadline = time.monotonic() + 20
             while not connection.exists() and process.poll() is None and time.monotonic() < deadline:

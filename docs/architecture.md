@@ -34,6 +34,8 @@ The temporary file allowlist and exact local receiver restriction apply under **
 
 For a separate agent application's own conversation and tool loop, use the [HTTP application adapter and MCP tool-server integration](application.md). That application contract is distinct from the model adapter below. `application.py` runs cases and verifies application receipts; `mcp_lab.py` exposes case-scoped instruments; `example_agent.py` is the independent host process using the official SDK. Both runners share the existing assessments and offline report formats.
 
+`host_tools.py` supplies the shared receipt-preserving MCP client and bounded one-request model bridge. The original application loop, `langchain_host.py` (`create_agent`/LangGraph) and `pydanticai_host.py` (`Agent.run`) use it from independent host processes. Native framework function tools dispatch actual calls through MCP; framework-specific conversation conversion preserves call identities and keeps private thinking out of reports. See [framework integrations](frameworks.md) for exact versions and supported extension points.
+
 Use the Python API for another tool-capable backend:
 
 ```python

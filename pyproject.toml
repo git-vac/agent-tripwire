@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-tripwire"
-version = "0.4.0"
+version = "0.5.0"
 description = "Evidence-driven prompt injection tests for tool-using assistants."
 requires-python = ">=3.10"
 dependencies = ["rich>=13.7,<16"]
@@ -13,6 +13,8 @@ readme = "README.md"
 
 [project.optional-dependencies]
 application = ["mcp==1.30.0"]
+langchain = ["mcp==1.30.0", "langchain==1.4.7", "langgraph==1.2.16", "langchain-core==1.7.0"]
+pydanticai = ["mcp==1.30.0", "pydantic-ai-slim==2.60.0"]
 
 [project.scripts]
 agent-tripwire = "agent_tripwire.cli:main"
