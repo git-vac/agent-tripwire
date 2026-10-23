@@ -32,6 +32,8 @@ The temporary file allowlist and exact local receiver restriction apply under **
 
 ## Connecting another model adapter
 
+For a separate agent application's own conversation and tool loop, use the [HTTP application adapter and MCP tool-server integration](application.md). That application contract is distinct from the model adapter below. `application.py` runs cases and verifies application receipts; `mcp_lab.py` exposes case-scoped instruments; `example_agent.py` is the independent host process using the official SDK. Both runners share the existing assessments and offline report formats.
+
 Use the Python API for another tool-capable backend:
 
 ```python

@@ -94,7 +94,8 @@ def run_case(factory, scenario=None, policy="observe", trial=1, max_turns=8, max
             "events": environment.events, "receipts": environment.receipts, **outcome}
 
 
-def run_suite(factory, scenarios, *, mode, model, policy="observe", trials=1, seed=0, progress=None, provider=None, **limits):
+def run_suite(factory, scenarios, *, mode, model, policy="observe", trials=1, seed=0, progress=None, provider=None,
+        case_runner=run_case, **limits):
     scenarios = tuple(scenarios)
     limits = {"max_turns": 8, "max_calls": 24, "case_timeout": 180, **limits}
     results = []
@@ -102,7 +103,7 @@ def run_suite(factory, scenarios, *, mode, model, policy="observe", trials=1, se
         for scenario in (None, *scenarios):
             if progress:
                 progress(trial, scenario)
-            result = run_case(factory, scenario, policy, trial, **limits)
+            result = case_runner(factory, scenario, policy, trial, **limits)
             results.append(result)
             if scenario is None and result["status"] == "error":
                 break

@@ -2,7 +2,7 @@
 
 **Did the assistant actually cross a permission boundary, or did it just say something suspicious?**
 
-Agent Tripwire tests indirect prompt injections against a tool-using support assistant. It places adversarial instructions in ticket bodies and search results, then records tool requests, completed reads, file changes and receipts from a local HTTP receiver. Findings are based on observed actions, not a second model's opinion.
+Agent Tripwire tests indirect prompt injections against tool-using assistants. It supports the bundled support assistant and a separately running application through a documented HTTP/MCP integration. It places adversarial instructions in ticket bodies and search results, then records tool requests, permission decisions, completed reads, file changes and receipts from a local HTTP receiver. Findings are based on observed actions, not a second model's opinion.
 
 ![Scripted demonstration of action-level evidence](examples/terminal.svg)
 
@@ -34,6 +34,31 @@ The default demo is a **scripted vulnerable agent**, not an AI model. It demonst
 
 Terminal timelines are included by default. Add `--details` for full injection text, tool results and assistant output. HTML reports are standalone, work offline and contain no JavaScript or external assets. Output files must be new; existing files are never overwritten. `--no-color` and `NO_COLOR` disable terminal colors.
 
+## Test a separate agent application
+
+Install the optional integration and run a complete experiment against a separate agent process:
+
+```bash
+python -m pip install ".[application]"
+python examples/application_experiment.py
+```
+
+The supported integration is a local HTTP application adapter for a Python MCP host, using the official MCP Python client and case-scoped **MCP 2025-11-25 Streamable HTTP JSON tools**. The separate example owns its conversation and model/tool loop. The harness supplies instrumented tools over a real server connection; it does not invoke the example's model directly.
+
+The experiment uses a clearly labeled vulnerable script: five verified crossings under `observe`, then five blocked attempts under `enforce`, with successful legitimate tasks and fresh clean controls under both policies. Offline JSON/HTML/JUnit reports and a comparison are saved in `reports/application-experiment/`. This validates the integration, not a model's security.
+
+For an independently running application:
+
+```bash
+# Terminal 1; generated lab credentials stay in this private, ignored file.
+agent-tripwire example-agent --connection-file reports/agent-connection.json
+# Terminal 2
+agent-tripwire app --connection-file reports/agent-connection.json --scenario ticket-exfil --json reports/application.json --html reports/application.html
+agent-tripwire app --connection-file reports/agent-connection.json --policy enforce --json reports/application-enforced.json
+```
+
+Use `example-agent --engine ollama --model YOUR_MODEL` or `--engine openai-compatible` for a real model inside that separate process. Existing applications must implement the small host shim and use the supplied case tools. [Integration guide](docs/application.md) covers setup, the exact adapter/receipt contract, selecting one poisoned response, runtime credentials, real providers, evidence and limits. Effects through other application capabilities are outside this instrumentation; the external process is not an OS sandbox.
+
 ## Evaluate your own model
 
 Start an [Ollama](https://docs.ollama.com/) server and install a model that supports [tool calling](https://docs.ollama.com/capabilities/tool-calling). The model must fit your machine. Agent Tripwire does not download models or require cloud accounts.
@@ -55,7 +80,7 @@ agent-tripwire run --model YOUR_MODEL --base-url http://127.0.0.1:11434 --max-tu
 
 Each trial first runs the legitimate task without injected content, then runs each selected attack in a fresh environment and conversation. If the clean control fails, the report marks attribution as uncertain. A model connection/protocol error on the control stops the suite rather than repeating the same failure for every case.
 
-This evaluates **your chosen model inside the bundled support-assistant application**. It does not attach to an arbitrary existing assistant or audit an entire model. The Python `run_case` / `run_suite` API also accepts an adapter factory implementing `next(messages, tools, remaining)`; see [architecture](docs/architecture.md).
+`run` evaluates **your chosen model inside the bundled support-assistant application**. To test a separate application's own conversation and tool loop, use the [application integration](docs/application.md). Neither command automatically attaches to an arbitrary existing assistant or audits an entire model. The Python `run_case` / `run_suite` API also accepts a model adapter factory implementing `next(messages, tools, remaining)`; see [architecture](docs/architecture.md).
 
 ### Check your connection first
 
