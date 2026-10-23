@@ -1,5 +1,13 @@
 # Changes
 
+## 0.6.0
+
+- Add `serve-agent --factory module:callable` for an installed application's per-case async factory, reusing the authenticated HTTP host and real receipt-preserving MCP connection.
+- Expose case tools, copied schemas, cooperative model-turn budgets and deadlines while the application retains its own conversation and tool loop; close retained contexts and support per-case resource cleanup.
+- Include an independently packaged support-agent example, a complete onboarding guide and separate-process scripted observe/enforce experiments with offline evidence and JUnit.
+- Require explicit application/configuration revisions and demo/run labels; redact environment-supplied credential echoes before tool dispatch, metadata and final output.
+- Preserve socket-timeout classification and sanitize malformed application results/cancellation. Add factory lifecycle, isolation, instrumentation and failure regressions to Linux/Windows installation CI.
+
 ## 0.5.0
 
 - Add independently running LangChain `create_agent`/LangGraph and PydanticAI `Agent.run` hosts with pinned optional dependencies and documented Python requirements.

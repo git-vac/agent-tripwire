@@ -22,22 +22,30 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output")
     parser.add_argument("--framework", choices=("native", "langchain", "pydanticai"), default="native")
+    parser.add_argument("--existing-agent", action="store_true", help="Use the separately installed support-agent factory example")
     args = parser.parse_args()
-    output = Path(args.output or ("reports/application-experiment" if args.framework == "native" else f"reports/{args.framework}-experiment"))
+    if args.existing_agent and args.framework != "native":
+        parser.error("Choose either --existing-agent or --framework")
+    profile = "existing-agent" if args.existing_agent else args.framework
+    output = Path(args.output or ("reports/application-experiment" if profile == "native" else f"reports/{profile}-experiment"))
     names = [f"{policy}.{extension}" for policy in ("observe", "enforce") for extension in ("json", "html", "xml")]
     names.append("comparison.html")
     if any((output / name).exists() for name in names):
         parser.error("Experiment output already exists; choose a new directory")
     with tempfile.TemporaryDirectory(prefix="tripwire-app-connection-") as directory:
         connection = Path(directory) / "connection.json"
-        process = subprocess.Popen([sys.executable, "-m", "agent_tripwire", "example-agent",
-            "--connection-file", str(connection), "--framework", args.framework], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        host = (["serve-agent", "--factory", "support_agent_example.tripwire:create_application",
+            "--application", "support-agent-example", "--application-version", "1.0.0",
+            "--mode", "demo", "--model", "scripted-vulnerable", "--provider", "scripted",
+            "--configuration", "fixture-v1"] if args.existing_agent else ["example-agent", "--framework", args.framework])
+        process = subprocess.Popen([sys.executable, "-m", "agent_tripwire", *host,
+            "--connection-file", str(connection)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             deadline = time.monotonic() + 20
             while not connection.exists() and process.poll() is None and time.monotonic() < deadline:
                 time.sleep(.02)
             if not connection.exists():
-                raise RuntimeError('Example agent did not start; install ".[application]" first')
+                raise RuntimeError('Example agent did not start; install ".[application]" and, for --existing-agent, ./examples/existing_agent')
             adapter = HTTPApplicationAdapter.from_file(connection)
             reports = []
             for policy in ("observe", "enforce"):
