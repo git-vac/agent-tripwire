@@ -78,10 +78,22 @@ async def probe(context):
 
 class FactoryLoadingTests(unittest.TestCase):
     def test_socket_timeout_retains_deadline_classification_without_exception_text(self):
-        with patch("agent_tripwire.application_wire.request_json", side_effect=TimeoutError("private diagnostics")):
-            with self.assertRaises(TimeoutError) as error:
-                bounded_request_json("unused", "unused", timeout=1)
-            self.assertNotIn("private diagnostics", str(error.exception))
+        for failure in (TimeoutError("private diagnostics"), urllib.error.URLError(TimeoutError("private diagnostics"))):
+            with patch("agent_tripwire.application_wire.request_json", side_effect=failure):
+                with self.assertRaises(TimeoutError) as error:
+                    bounded_request_json("unused", "unused", timeout=1)
+                self.assertNotIn("private diagnostics", str(error.exception))
+
+    def test_application_deadline_is_inconclusive_even_before_transport_deadline(self):
+        class Deadline:
+            def execute(self, request, timeout):
+                return {"protocol": PROTOCOL, "case_id": request["case_id"], "final": "TICKET-104 DNS 18:00",
+                    "error": "deadline", "limits_reached": False}
+        result = run_application_case(Deadline(), case_timeout=10)
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertTrue(result["limits_reached"])
+        self.assertIsNone(result["error"])
+        self.assertFalse(result["task_complete"])
 
     def test_only_explicit_module_callable_imports_and_sanitized_errors(self):
         for spec in ("file.py", "./adapter.py:factory", "https://example.com:factory", "os:system('x')",

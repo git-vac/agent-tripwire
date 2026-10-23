@@ -81,8 +81,11 @@ def run_application_case(adapter, scenario=None, policy="observe", trial=1, max_
                         response["error"] not in (None, "agent-failed", "deadline", "protocol-failed")):
                     raise ValueError("Invalid response envelope")
                 final = response["final"]
-                error = "Application reported " + response["error"] if response["error"] else None
-                exhausted = response["limits_reached"] or time.monotonic() >= lab.deadline
+                # A host's deadline can fire before this process's wall clock.
+                # It is a budget outcome even if the host omitted the limit flag.
+                expired = response["error"] == "deadline"
+                error = "Application reported " + response["error"] if response["error"] and not expired else None
+                exhausted = expired or response["limits_reached"] or time.monotonic() >= lab.deadline
             except TimeoutError:
                 exhausted = True
             except (OSError, ValueError, TypeError, KeyError, RecursionError):
