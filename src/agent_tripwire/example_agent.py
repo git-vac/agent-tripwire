@@ -2,16 +2,20 @@
 import asyncio
 from contextlib import AbstractContextManager
 import hashlib
+import importlib
+from importlib.metadata import version
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import re
 import secrets
+import sys
 from threading import Lock, Thread
-import time
 
 from .agents import AgentError, Ollama, OpenAICompatible, calls
 from .application_wire import PROTOCOL, authorized, loopback_url, read_json, reply
 from .report import new_file
+from .host_tools import ExecutionLimit, ModelBridge, case_tools
+from . import __version__
 
 
 class ScriptedApplication:
@@ -58,79 +62,60 @@ def validate_request(request):
 
 
 async def conversation(request, factory):
-    # This optional dependency is confined to the example host. The harness and
-    # narrow tool server use the standard library and still support base installs.
-    import httpx
-    from mcp import ClientSession
-    from mcp.client.streamable_http import streamable_http_client
-
-    limits = request["limits"]
-    deadline = time.monotonic() + limits["case_timeout"]
-    mcp = request["mcp"]
     messages = [{"role": "system", "content": request["system"]}, {"role": "user", "content": request["task"]}]
-    agent = factory(request["seed"])
-    count = 0
-    async with httpx.AsyncClient(headers={"Authorization": "Bearer " + mcp["token"]},
-            timeout=httpx.Timeout(5), trust_env=False, follow_redirects=False) as client:
-        async with streamable_http_client(mcp["url"], http_client=client, terminate_on_close=False) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                initialized = await session.initialize()
-                if initialized.protocolVersion != "2025-11-25":
-                    raise ValueError("Unsupported MCP lab version")
-                listed = await session.list_tools()
-                tools = [{"type": "function", "function": {"name": tool.name,
-                    "description": tool.description or "", "parameters": tool.inputSchema}} for tool in listed.tools]
-                for _turn in range(limits["max_turns"]):
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        raise asyncio.TimeoutError()
-                    message = await asyncio.to_thread(agent.next, messages, tools, remaining)
-                    message = Ollama.validate_message(message)
-                    messages.append(message)
-                    if not message.get("tool_calls"):
-                        return message.get("content", ""), False
-                    for call in message["tool_calls"]:
-                        if count >= limits["max_calls"]:
-                            return "", True
-                        count += 1
-                        function = call["function"]
-                        result = await session.call_tool(function["name"], function["arguments"])
-                        if len(result.content) != 1 or result.content[0].type != "text":
-                            raise ValueError("Unsupported tool response")
-                        text = result.content[0].text
-                        metadata = (result.meta or {}).get("tripwire", {})
-                        if (set(metadata) != {"case_id", "delivery_id", "sha256"} or metadata["case_id"] != request["case_id"] or
-                                metadata["sha256"] != hashlib.sha256(text.encode()).hexdigest()):
-                            raise ValueError("Mismatched tool delivery identity or digest")
-                        # Receipt proves application deserialization, before model submission.
-                        acknowledged = await client.post(mcp["url"].removesuffix("/mcp") + "/ack", json=metadata)
-                        acknowledged.raise_for_status()
-                        reply_message = {"role": "tool", "tool_name": function["name"], "content": text}
-                        if call.get("id"):
-                            reply_message["tool_call_id"] = call["id"]
-                        messages.append(reply_message)
-    return "", True
+    async with case_tools(request) as channel:
+        bridge = ModelBridge(factory(request["seed"]), channel)
+        while True:
+            message = await bridge.next(messages)
+            messages.append(message)
+            if not message.get("tool_calls"):
+                return message.get("content", ""), channel.exhausted
+            for call in message["tool_calls"]:
+                function = call["function"]
+                text = await channel.call(function["name"], function["arguments"])
+                messages.append({"role": "tool", "tool_name": function["name"], "content": text,
+                    "tool_call_id": call["id"]})
 
 
-async def execute(request, factory):
+async def execute(request, factory, runner=conversation):
     final, error, exhausted = "", None, False
     try:
-        final, exhausted = await asyncio.wait_for(conversation(request, factory), request["limits"]["case_timeout"])
+        final, exhausted = await asyncio.wait_for(runner(request, factory), request["limits"]["case_timeout"])
         if len(final.encode()) > 32768:
             raise ValueError("Final answer too large")
     except asyncio.TimeoutError:
         error, exhausted = "deadline", True
     except AgentError:
         error = "agent-failed"
-    except Exception:
+    except Exception as exc:
         # Never serialize SDK/provider exceptions: they may include headers/URLs.
-        error = "protocol-failed"
+        def limit_error(error):
+            return isinstance(error, (ExecutionLimit, TimeoutError)) or any(limit_error(item)
+                for item in getattr(error, "exceptions", ()))
+        if limit_error(exc):
+            exhausted = True
+        else:
+            error = "protocol-failed"
     return {"protocol": PROTOCOL, "case_id": request["case_id"], "final": final,
         "error": error, "limits_reached": exhausted}
 
 
 class ExampleApplication(AbstractContextManager):
-    def __init__(self, engine="scripted-vulnerable", model=None, base_url=None, api_key=None, timeout=60):
+    def __init__(self, engine="scripted-vulnerable", model=None, base_url=None, api_key=None, timeout=60, framework="native"):
+        if framework not in ("native", "langchain", "pydanticai"):
+            raise ValueError("Unknown application framework")
+        if framework == "pydanticai" and sys.version_info < (3, 11):
+            raise ValueError("The PydanticAI host requires Python 3.11 or later")
+        self.runner = conversation
+        packages = {"native": ("mcp",), "langchain": ("mcp", "langchain", "langchain-core", "langgraph"),
+            "pydanticai": ("mcp", "pydantic-ai-slim", "pydantic-graph")}[framework]
+        try:
+            if framework != "native":
+                module = importlib.import_module(".langchain_host" if framework == "langchain" else ".pydanticai_host", __package__)
+                self.runner = module.conversation
+            versions = {name: version(name) for name in packages}
+        except ImportError:
+            raise ValueError(f'This host needs: python -m pip install ".[{"application" if framework == "native" else framework}]"') from None
         if engine not in ("scripted-vulnerable", "scripted-guarded", "ollama", "openai-compatible"):
             raise ValueError("Unknown application engine")
         if engine.startswith("scripted"):
@@ -149,8 +134,9 @@ class ExampleApplication(AbstractContextManager):
             provider, mode = engine, "run"
         self.token = secrets.token_urlsafe(32)
         self.secrets = [value for value in (self.token, api_key) if value]
-        config = hashlib.sha256(json.dumps([engine, model, base_url, timeout]).encode()).hexdigest()
-        self.info = {"protocol": PROTOCOL, "application": "tripwire-example-mcp-agent", "version": "0.4.0",
+        config = hashlib.sha256(json.dumps([engine, model, base_url, timeout, framework, versions], sort_keys=True).encode()).hexdigest()
+        application = "tripwire-example-mcp-agent" if framework == "native" else f"tripwire-{framework}-mcp-agent"
+        self.info = {"protocol": PROTOCOL, "application": application, "version": __version__,
             "mode": mode, "model": model, "provider": provider, "configuration": config}
         self.lock, self.case_ids = Lock(), set()
 
@@ -193,7 +179,7 @@ class ExampleApplication(AbstractContextManager):
                         reply(self, 409)
                         return
                     app.case_ids.add(request["case_id"])
-                    response = asyncio.run(execute(request, app.factory))
+                    response = asyncio.run(execute(request, app.factory, app.runner))
                     # Runtime capabilities are private even if a provider echoes them.
                     for secret in [*app.secrets, request["mcp"]["token"]]:
                         response["final"] = response["final"].replace(secret, "[REDACTED CREDENTIAL]")

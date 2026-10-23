@@ -59,6 +59,20 @@ agent-tripwire app --connection-file reports/agent-connection.json --policy enfo
 
 Use `example-agent --engine ollama --model YOUR_MODEL` or `--engine openai-compatible` for a real model inside that separate process. Existing applications must implement the small host shim and use the supplied case tools. [Integration guide](docs/application.md) covers setup, the exact adapter/receipt contract, selecting one poisoned response, runtime credentials, real providers, evidence and limits. Effects through other application capabilities are outside this instrumentation; the external process is not an OS sandbox.
 
+### LangChain/LangGraph and PydanticAI
+
+Optional framework applications own the conversation and tool loop through LangChain `create_agent`/LangGraph or PydanticAI `Agent.run`:
+
+```bash
+python -m pip install ".[langchain]"
+python examples/application_experiment.py --framework langchain
+# PydanticAI requires Python 3.11+:
+python -m pip install ".[pydanticai]"
+python examples/application_experiment.py --framework pydanticai
+```
+
+Use `example-agent --framework langchain` or `--framework pydanticai` to keep an application running, then evaluate it with the same `app` command. Both support scripted harness checks and the existing real-model backend options. [Framework setup, supported versions and limits](docs/frameworks.md) explain the native tool bridges, delivery receipts and independent installation paths.
+
 ## Evaluate your own model
 
 Start an [Ollama](https://docs.ollama.com/) server and install a model that supports [tool calling](https://docs.ollama.com/capabilities/tool-calling). The model must fit your machine. Agent Tripwire does not download models or require cloud accounts.

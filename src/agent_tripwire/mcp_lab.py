@@ -13,6 +13,7 @@ import time
 
 from .application_wire import authorized, read_json, reply
 from .environment import Environment, TOOLS
+from . import __version__
 
 MCP_VERSION = "2025-11-25"
 
@@ -163,7 +164,7 @@ class MCPToolServer(AbstractContextManager):
                 return error(-32602, "Invalid initialization")
             self.initialized = True
             result = {"protocolVersion": MCP_VERSION, "capabilities": {"tools": {}},
-                "serverInfo": {"name": "agent-tripwire-lab", "version": "0.4.0"}}
+                "serverInfo": {"name": "agent-tripwire-lab", "version": __version__}}
         elif method == "notifications/initialized" and identifier is None and self.initialized:
             self.ready = True
             return 202, None

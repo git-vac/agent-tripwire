@@ -48,6 +48,7 @@ def main(argv=None):
     example = commands.add_parser("example-agent", help="Serve a separate MCP agent application on loopback")
     example.add_argument("--connection-file", required=True, metavar="FILE", help="New private file for generated lab credentials")
     example.add_argument("--engine", choices=("scripted-vulnerable", "scripted-guarded", "ollama", "openai-compatible"), default="scripted-vulnerable")
+    example.add_argument("--framework", choices=("native", "langchain", "pydanticai"), default="native")
     example.add_argument("--model")
     example.add_argument("--base-url")
     example.add_argument("--api-key-env", metavar="NAME")
@@ -104,7 +105,7 @@ def main(argv=None):
                 raise ValueError("The named API key environment variable is empty or unset")
             if Path(args.connection_file).exists():
                 raise ValueError("Connection file already exists; choose a new private filename")
-            with ExampleApplication(args.engine, args.model, args.base_url, api_key, args.timeout) as app:
+            with ExampleApplication(args.engine, args.model, args.base_url, api_key, args.timeout, args.framework) as app:
                 app.connection_file(args.connection_file)
                 console.print(Text("Separate MCP example application ready. Private connection file created; keep this process running."))
                 console.print(Text("Mode: " + app.info["mode"] + " · " + app.info["model"]))

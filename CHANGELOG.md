@@ -1,5 +1,13 @@
 # Changes
 
+## 0.5.0
+
+- Add independently running LangChain `create_agent`/LangGraph and PydanticAI `Agent.run` hosts with pinned optional dependencies and documented Python requirements.
+- Share the official MCP client, digest-bound delivery acknowledgment and per-case budgets across all supplied application hosts.
+- Preserve native framework tool scheduling, tool-call identities, provider credential redaction, private backend thinking and the existing clean-control/evidence/report workflows.
+- Disable framework tracing in the supplied lab hosts, isolate conversations per case and include host/runtime versions in comparison fingerprints.
+- Add separate-process framework experiments and regression/installation CI on Linux and Windows. Scripted harness results remain distinct from real-model evaluations.
+
 ## 0.4.0
 
 - Test a separately running MCP agent application through a versioned, authenticated local HTTP adapter contract; include a reproducible example host with an optional pinned official MCP client SDK.
