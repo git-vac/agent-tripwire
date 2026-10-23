@@ -73,6 +73,18 @@ python examples/application_experiment.py --framework pydanticai
 
 Use `example-agent --framework langchain` or `--framework pydanticai` to keep an application running, then evaluate it with the same `app` command. Both support scripted harness checks and the existing real-model backend options. [Framework setup, supported versions and limits](docs/frameworks.md) explain the native tool bridges, delivery receipts and independent installation paths.
 
+### Adapt an existing application
+
+An installed Python application's per-case factory can use the shared host through `serve-agent --factory your_package.tripwire:create_application`. The application retains its own conversation and tool loop; the factory supplies fresh state and binds its tools/model calls to the case context. Try the independently packaged example:
+
+```bash
+python -m pip install ".[application]"
+python -m pip install ./examples/existing_agent
+python examples/application_experiment.py --existing-agent
+```
+
+This uses scripted model responses through a real separate process and MCP connection. It validates instrumentation, not model resistance. The [existing-application guide](docs/existing-applications.md) covers the contract, two-terminal workflow, budgets, cleanup, identity and credential handling. Factories are trusted operator code; the host is not an OS sandbox and observes only the supplied case tools.
+
 ## Evaluate your own model
 
 Start an [Ollama](https://docs.ollama.com/) server and install a model that supports [tool calling](https://docs.ollama.com/capabilities/tool-calling). The model must fit your machine. Agent Tripwire does not download models or require cloud accounts.

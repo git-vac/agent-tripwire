@@ -54,6 +54,17 @@ def main(argv=None):
     example.add_argument("--api-key-env", metavar="NAME")
     example.add_argument("--timeout", type=bounded(1, 120), default=60)
     example.add_argument("--no-color", action="store_true")
+    serve = commands.add_parser("serve-agent", help="Serve an installed application's per-case factory over HTTP/MCP")
+    serve.add_argument("--factory", required=True, metavar="MODULE:CALLABLE", help="Trusted operator-selected async context manager factory")
+    serve.add_argument("--connection-file", required=True, metavar="FILE", help="New private file for generated lab credentials")
+    serve.add_argument("--application", required=True, help="Non-secret application identity")
+    serve.add_argument("--application-version", required=True, help="Application revision; change when application code changes")
+    serve.add_argument("--configuration", required=True, help="Non-secret configuration revision; change when behavior changes")
+    serve.add_argument("--mode", required=True, choices=("demo", "run"), help="Use demo for scripted model responses")
+    serve.add_argument("--model", required=True, help="Declared model identity; no credentials")
+    serve.add_argument("--provider", required=True, help="Declared provider identity; no credentials")
+    serve.add_argument("--redact-env", action="append", default=[], metavar="NAME", help="Read a provider credential for exact echo redaction, never from an argument")
+    serve.add_argument("--no-color", action="store_true")
     for name in ("demo", "run", "check", "report", "app"):
         sub = report_parser if name == "report" else commands.add_parser(name, help={
             "demo": "Scripted instrumentation demo", "run": "Test a real tool-calling model",
@@ -94,20 +105,30 @@ def main(argv=None):
     args = parser.parse_args(argv)
     console = Console(no_color=args.no_color or bool(os.getenv("NO_COLOR")), highlight=False)
     try:
-        if args.command == "example-agent":
+        if args.command in ("example-agent", "serve-agent"):
             try:
                 import mcp  # noqa: F401
             except ImportError:
-                raise ValueError('The example application needs: python -m pip install ".[application]"') from None
-            from .example_agent import ExampleApplication
-            api_key = os.environ.get(args.api_key_env) if args.api_key_env else None
-            if args.api_key_env and not api_key:
-                raise ValueError("The named API key environment variable is empty or unset")
+                raise ValueError('The application host needs: python -m pip install ".[application]"') from None
             if Path(args.connection_file).exists():
                 raise ValueError("Connection file already exists; choose a new private filename")
-            with ExampleApplication(args.engine, args.model, args.base_url, api_key, args.timeout, args.framework) as app:
+            if args.command == "example-agent":
+                from .example_agent import ExampleApplication
+                api_key = os.environ.get(args.api_key_env) if args.api_key_env else None
+                if args.api_key_env and not api_key:
+                    raise ValueError("The named API key environment variable is empty or unset")
+                host = ExampleApplication(args.engine, args.model, args.base_url, api_key, args.timeout, args.framework)
+            else:
+                from .application_factory import FactoryApplication
+                redactions = [os.environ.get(name) for name in args.redact_env]
+                if not all(redactions):
+                    raise ValueError("A named redaction environment variable is empty or unset")
+                host = FactoryApplication(args.factory, application=args.application, version=args.application_version,
+                    configuration=args.configuration, mode=args.mode, model=args.model, provider=args.provider,
+                    redactions=redactions)
+            with host as app:
                 app.connection_file(args.connection_file)
-                console.print(Text("Separate MCP example application ready. Private connection file created; keep this process running."))
+                console.print(Text("Separate MCP application ready. Private connection file created; keep this process running."))
                 console.print(Text("Mode: " + app.info["mode"] + " · " + app.info["model"]))
                 app.thread.join()
             return 0

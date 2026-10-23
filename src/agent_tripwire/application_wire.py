@@ -44,6 +44,8 @@ def bounded_request_json(url, token, payload=None, timeout=10):
     def work():
         try:
             result.put((True, request_json(url, token, payload, timeout)))
+        except TimeoutError:
+            result.put((False, "deadline"))
         except Exception:
             result.put((False, None))
 
@@ -53,6 +55,8 @@ def bounded_request_json(url, token, payload=None, timeout=10):
     except Empty:
         raise TimeoutError("Application deadline reached") from None
     if not ok:
+        if response == "deadline":
+            raise TimeoutError("Application deadline reached") from None
         raise ValueError("Application transport or protocol failed")
     return response
 

@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tripwire-support-agent-example"
+version = "1.0.0"
+description = "Independent support agent and a small Agent Tripwire factory adapter."
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]

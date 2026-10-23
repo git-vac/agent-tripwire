@@ -1,5 +1,7 @@
 # Test a separate agent application
 
+For an existing installed Python application, the [application-factory host](existing-applications.md) supplies the HTTP server and receipt-preserving client around your per-case construction function. Use that path to avoid writing your own HTTP shim; the protocol below remains available for custom hosts.
+
 The supported integration is **a local HTTP application adapter for a Python MCP host**, with a separately running example application using the official MCP Python client SDK. The application owns the conversation, model requests and tool dispatch. Agent Tripwire supplies a fresh synthetic MCP tool server for each case and records its effects. The harness never calls the application's model adapter directly.
 
 An existing application must implement the HTTP contract below, start a fresh conversation for every case and direct its test tool calls to the supplied server. The original host is included in the `application` extra. Optional [LangChain/LangGraph and PydanticAI hosts](frameworks.md) implement the same contract with framework-owned agent loops.

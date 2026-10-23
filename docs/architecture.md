@@ -30,6 +30,10 @@ The temporary file allowlist and exact local receiver restriction apply under **
 
 `report.py` renders literal terminal text and HTML-escaped evidence. The standalone HTML uses a restrictive content-security policy and no JavaScript. `cli.py` checks output paths before running and writes new files exclusively.
 
+## Existing application factories
+
+`application_host.py` shares the authenticated listener, request validation and bounded result envelope across supplied and custom hosts. `application_factory.py` loads an operator-selected installed factory, creates a fresh context per case and delegates to the application's own async `run`. The context routes effects through the existing MCP client, counts cooperative model calls, redacts known credential echoes and closes retained capabilities after cleanup. See [existing-application onboarding](existing-applications.md).
+
 ## Connecting another model adapter
 
 For a separate agent application's own conversation and tool loop, use the [HTTP application adapter and MCP tool-server integration](application.md). That application contract is distinct from the model adapter below. `application.py` runs cases and verifies application receipts; `mcp_lab.py` exposes case-scoped instruments; `example_agent.py` is the independent host process using the official SDK. Both runners share the existing assessments and offline report formats.
