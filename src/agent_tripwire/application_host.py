@@ -47,7 +47,7 @@ async def execute(request, runner):
     except Exception as exc:
         # Never serialize SDK/provider exceptions: they may include headers/URLs.
         def limit_error(error):
-            return isinstance(error, (ExecutionLimit, TimeoutError)) or any(limit_error(item)
+            return isinstance(error, (ExecutionLimit, TimeoutError, asyncio.TimeoutError)) or any(limit_error(item)
                 for item in getattr(error, "exceptions", ()))
         if limit_error(exc):
             exhausted = True

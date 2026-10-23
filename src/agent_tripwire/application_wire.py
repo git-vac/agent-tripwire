@@ -4,6 +4,7 @@ import secrets
 from queue import Queue, Empty
 from threading import Thread
 import urllib.parse
+import urllib.error
 import urllib.request
 
 from .environment import NoRedirect
@@ -44,10 +45,10 @@ def bounded_request_json(url, token, payload=None, timeout=10):
     def work():
         try:
             result.put((True, request_json(url, token, payload, timeout)))
-        except TimeoutError:
-            result.put((False, "deadline"))
-        except Exception:
-            result.put((False, None))
+        except Exception as exc:
+            timed_out = isinstance(exc, TimeoutError) or (
+                isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, TimeoutError))
+            result.put((False, "deadline" if timed_out else None))
 
     Thread(target=work, daemon=True).start()
     try:
