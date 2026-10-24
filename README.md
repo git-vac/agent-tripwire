@@ -2,9 +2,9 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/agent-tripwire-wordmark-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="assets/branding/agent-tripwire-wordmark-light.png">
-    <img src="assets/branding/agent-tripwire-wordmark-light.png" width="640" alt="Agent Tripwire logo">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/agent-tripwire-wordmark-dark-v2.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/branding/agent-tripwire-wordmark-light-v2.png">
+    <img src="assets/branding/agent-tripwire-wordmark-light-v2.png" width="640" alt="Agent Tripwire logo">
   </picture>
 </p>
 
