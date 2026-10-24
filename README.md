@@ -1,5 +1,9 @@
 # Agent Tripwire
 
+<p align="center">
+  <img src="assets/branding/agent-tripwire-wordmark.png" width="640" alt="Agent Tripwire logo">
+</p>
+
 **Did the assistant actually cross a permission boundary, or did it just say something suspicious?**
 
 Agent Tripwire tests indirect prompt injections against tool-using assistants. It supports the bundled support assistant and a separately running application through a documented HTTP/MCP integration. It places adversarial instructions in ticket bodies and search results, then records tool requests, permission decisions, completed reads, file changes and receipts from a local HTTP receiver. Findings are based on observed actions, not a second model's opinion.
