@@ -1,7 +1,11 @@
 # Agent Tripwire
 
 <p align="center">
-  <img src="assets/branding/agent-tripwire-wordmark.png" width="640" alt="Agent Tripwire logo">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/agent-tripwire-wordmark-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/branding/agent-tripwire-wordmark-light.png">
+    <img src="assets/branding/agent-tripwire-wordmark-light.png" width="640" alt="Agent Tripwire logo">
+  </picture>
 </p>
 
 **Did the assistant actually cross a permission boundary, or did it just say something suspicious?**
