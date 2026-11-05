@@ -12,7 +12,7 @@
 
 Agent Tripwire tests indirect prompt injections against tool-using assistants. It supports the bundled support assistant and a separately running application through a documented HTTP/MCP integration. It places adversarial instructions in ticket bodies and search results, then records tool requests, permission decisions, completed reads, file changes and receipts from a local HTTP receiver. Findings are based on observed actions, not a second model's opinion.
 
-![Scripted demonstration of action-level evidence](examples/terminal.svg)
+![Agent Tripwire scripted trace: an injected ticket leads to a confirmed private read and a canary transfer verified by the local receiver](examples/terminal.svg)
 
 [Example HTML report](examples/demo-report.html) · [Run comparison](examples/comparison.html) · [Custom scenario file](examples/custom-scenarios.json) · [Architecture and evidence](docs/architecture.md)
 
